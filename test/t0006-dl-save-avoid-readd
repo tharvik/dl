@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+echo random > to_copy
+
+create_script <<-EOF
+if [ "\${1:-}" != done ]
+then
+	dl fetcher cat cat
+	dl add -o copied to_copy
+	dl save done
+fi
+EOF
+
+dl
+rm copied
+dl
+
+[ ! -e copied ] ||
+	fail 'state should avoid re-adding'

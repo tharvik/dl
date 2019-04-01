@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+create_script <<-EOF
+dl add nothing
+EOF
+
+dl &&
+	fail 'missing fetcher should fail fetch' || :

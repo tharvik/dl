@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+echo random > file_to_copy
+
+create_script <<-EOF
+dl fetcher cat cat
+dl add -o copied file_to_copy
+EOF
+
+dl parse
+[ $(lsdir | wc -l) -eq 3 ] ||
+	fail 'parse should only create database'
+dl fetch
+
+cmp file_to_copy copied

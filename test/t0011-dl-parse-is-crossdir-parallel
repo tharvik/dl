@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+[ "$(nproc)" -eq 1 ] &&
+	skip 'need multi processor'
+
+create_script a b c d <<-EOF
+sleep 1
+EOF
+
+out=$(time -f '%e' dl 2>&1 >2 | tail -n1 | cut -d . -f 1)
+
+[ "$out" -lt "$(nproc)" ] ||
+	fail 'not faster than single thread'

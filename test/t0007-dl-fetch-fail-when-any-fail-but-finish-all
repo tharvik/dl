@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+echo random > file_to_copy
+
+create_script <<-EOF
+dl fetcher cat cat
+dl add -o copied file_to_copy
+dl add -o undefined missing_file
+dl add -o copied_again file_to_copy
+EOF
+
+dl &&
+	fail 'should exit with != 0 when fetcher fail' || :
+
+cmp file_to_copy copied
+cmp file_to_copy copied_again

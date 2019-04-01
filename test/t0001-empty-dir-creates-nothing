@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+dl
+
+[ $(lsdir | wc -l) -eq 0 ] ||
+	fail "dl shouldn't create any file"

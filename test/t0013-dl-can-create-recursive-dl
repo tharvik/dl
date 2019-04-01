@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+create_script <<-EOF
+set -x
+mkdir a
+cat > a/.dl <<-INNER
+#!/bin/sh
+touch b
+INNER
+chmod +x a/.dl
+EOF
+
+dl
+
+[ -e a/b ] ||
+	fail 'file should be created'

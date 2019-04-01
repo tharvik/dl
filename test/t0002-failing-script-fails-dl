@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+echo false | create_script
+
+dl &&
+	fail 'dl should have failed as script failed' || :

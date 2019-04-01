@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+mkdir -p a/b
+
+echo random > a/b/file_to_copy
+
+create_script a/b <<-EOF
+dl fetcher cat cat
+dl add -o copied file_to_copy
+EOF
+
+dl
+
+cmp a/b/file_to_copy a/b/copied
+
+rm a/b/copied
+
+dl parse
+dl fetch
+
+cmp a/b/file_to_copy a/b/copied

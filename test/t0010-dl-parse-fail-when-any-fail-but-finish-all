@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+mkdir a b
+
+echo random > b/file_to_copy
+
+create_script a <<-EOF
+false
+EOF
+
+create_script b <<-EOF
+dl fetcher cat cat
+dl add -o copied file_to_copy
+EOF
+
+dl parse &&
+	fail 'should exit with != 0 when parsing fail' || :
+dl fetch
+
+cmp b/file_to_copy b/copied
