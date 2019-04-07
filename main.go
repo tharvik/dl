@@ -71,51 +71,43 @@ func drainInto(d chan error, chans []chan error) {
 	close(d)
 }
 
-func parseRec(ret chan error, prefix string) {
-	script := filepath.Join(prefix, lib.ScriptFile)
-	// TODO add saved state
-	cmd := exec.Command("./" + script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		switch v := err.(type) {
-		case *os.PathError:
-			code := v.Err.(syscall.Errno)
-			// "no such file or directory"
-			if code != 0x02 {
-				ret <- errAppend(prefix, err)
-				close(ret)
-				return
-			}
-		default:
+func recurseBelow(prefix string, act func(string) error) chan error {
+	ret := make(chan error)
+
+	var rec func(chan error, string)
+	rec = func(ret chan error, prefix string) {
+		err := act(prefix)
+		if err != nil {
+			ret <- err
+			close(ret)
+			return
+		}
+
+		files, err := ioutil.ReadDir(prefix)
+		if err != nil {
 			ret <- errAppend(prefix, err)
 			close(ret)
 			return
 		}
-	}
 
-	files, err := ioutil.ReadDir(prefix)
-	if err != nil {
-		ret <- errAppend(prefix, err)
-		close(ret)
-		return
-	}
+		rets := make([]chan error, 0)
+		for _, f := range files {
+			if !f.IsDir() || strings.HasPrefix(f.Name(), ".") {
+				continue
+			}
 
-	rets := make([]chan error, 0)
-	for _, f := range files {
-		if !f.IsDir() || strings.HasPrefix(f.Name(), ".") {
-			continue
+			recRet := make(chan error)
+			recPrefix := filepath.Join(prefix, f.Name())
+			go rec(recRet, recPrefix)
+
+			rets = append(rets, recRet)
 		}
 
-		recRet := make(chan error)
-		recPrefix := filepath.Join(prefix, f.Name())
-		go parseRec(recRet, recPrefix)
-
-		rets = append(rets, recRet)
+		drainInto(ret, rets)
 	}
+	go rec(ret, prefix)
 
-	drainInto(ret, rets)
+	return ret
 }
 
 func parse(args []string) error {
@@ -125,8 +117,28 @@ func parse(args []string) error {
 
 	rets := make([]chan error, len(args))
 	for i, arg := range args {
-		rets[i] = make(chan error)
-		go parseRec(rets[i], arg)
+		rets[i] = recurseBelow(arg, func(prefix string) error {
+			script := filepath.Join(prefix, lib.ScriptFile)
+			// TODO add saved state
+			cmd := exec.Command("./" + script)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			err := cmd.Run()
+			if err != nil {
+				switch v := err.(type) {
+				case *os.PathError:
+					code := v.Err.(syscall.Errno)
+					// "no such file or directory"
+					if code != 0x02 {
+						return errAppend(prefix, err)
+					}
+				default:
+					return errAppend(prefix, err)
+				}
+			}
+
+			return nil
+		})
 	}
 	ret := make(chan error, 1)
 	go drainInto(ret, rets)
@@ -139,6 +151,10 @@ func parse(args []string) error {
 }
 
 func fetch(args []string) error {
+	if len(args) == 0 {
+		args = []string{"."}
+	}
+
 	return errors.New("fetch: TODO")
 }
 
