@@ -2,8 +2,8 @@
 
 . ./dl.sh
 
-[ "$(nproc)" -eq 1 ] &&
-	skip 'need multi processor'
+[ "$(nproc)" -le 2 ] &&
+	skip 'need real multi processor'
 
 create_script a b c d <<-EOF
 sleep 1

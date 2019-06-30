@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 . ./dl.sh
-set -x
 
 [ "$(nproc)" -eq 1 ] &&
 	skip 'need multi processor'

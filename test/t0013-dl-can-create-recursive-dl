@@ -3,7 +3,6 @@
 . ./dl.sh
 
 create_script <<-EOF
-set -x
 mkdir a
 cat > a/.dl <<-INNER
 #!/bin/sh
