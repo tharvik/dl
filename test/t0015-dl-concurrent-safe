@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+readonly JOBS=$(($(nproc) * 10))
+
+create_script <<-EOF
+for i in \$(seq 10)
+do
+	dl fetcher echoer\$i echo \$i &
+	dl add -f echoer\$i -o echoed\$i \$i &
+done
+for i in \$(seq 20)
+do
+	wait -n
+done
+EOF
+
+for _ in $(seq $JOBS)
+do
+	dl &
+done
+
+for _ in $(seq $JOBS)
+do
+	wait -n
+done
+
+for i in $(seq 10)
+do
+	echo $i $i | cmp echoed$i
+done

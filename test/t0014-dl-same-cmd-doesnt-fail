@@ -6,10 +6,9 @@ echo random > file_to_copy
 
 create_script <<-EOF
 dl fetcher cat cat
-dl add -o copied file_to_copy
+dl add -f cat -o copied file_to_copy
 EOF
 
 dl parse
-dl fetch
-
+dl
 cmp file_to_copy copied

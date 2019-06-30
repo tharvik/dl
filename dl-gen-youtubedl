@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+
+import itertools
+import subprocess
+import sys
+import youtube_dl
+
+URL = sys.argv[1]
+LAST = int(sys.argv[2]) if len(sys.argv) == 3 else 0
+
+subprocess.run(['dl', 'fetcher', 'youtube-dl', 'youtube-dl', '-o', '-'], check=True)
+
+def get_videos():
+    playlist_ytdl = youtube_dl.YoutubeDL({
+        'simulate': True,
+        'quiet': True,
+        'extract_flat': 'in_playlist',
+    })
+    info = playlist_ytdl.extract_info(URL)
+
+    if 'entries' not in info:
+        yield playlist_ytdl.prepare_filename(info), info
+        return
+
+    remaining = len(info['entries']) - LAST
+    if remaining < 0:
+        print('last downloaded is greater than playlist size')
+        sys.exit(1)
+    if remaining == 0:
+        sys.exit(0)
+
+    ytdl = youtube_dl.YoutubeDL({
+        'simulate': True,
+        'playlistend': remaining,
+        'ignoreerrors': True,
+    })
+
+    info = ytdl.extract_info(URL)
+
+    for v in reversed(info['entries']):
+        yield ytdl.prepare_filename(v), v
+
+for i, (filename, v) in zip(itertools.count(LAST + 1), get_videos()):
+    if v is None:
+        # skip errors
+        continue
+    subprocess.run(['dl', 'add', '-f', 'youtube-dl', '-o', filename, v['webpage_url']], check=True)
+    subprocess.run(['dl', 'save', str(i)], check=True)

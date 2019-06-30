@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 . ./dl.sh
+set -x
 
 [ "$(nproc)" -eq 1 ] &&
 	skip 'need multi processor'
@@ -9,11 +10,11 @@ create_script <<-EOF
 dl fetcher sleeper sleep
 for i in \$(seq "$(nproc)")
 do
-	dl add -o out\$i 1
+	dl add -f sleeper -o out\$i 1
 done
 EOF
 
-out=$(time -f '%e' dl 2>&1 >2 | tail -n1 | cut -d . -f 1)
+out=$(command time -f '%e' dl 2>&1 >2 | tail -n1 | cut -d . -f 1)
 
 for i in $(seq "$(nproc)")
 do

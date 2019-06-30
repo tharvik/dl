@@ -6,9 +6,9 @@ echo random > file_to_copy
 
 create_script <<-EOF
 dl fetcher cat cat
-dl add -o copied file_to_copy
-dl add -o undefined missing_file
-dl add -o copied_again file_to_copy
+dl add -f cat -o copied file_to_copy
+dl add -f cat -o undefined missing_file
+dl add -f cat -o copied_again file_to_copy
 EOF
 
 dl &&

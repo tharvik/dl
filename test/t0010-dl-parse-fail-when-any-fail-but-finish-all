@@ -12,7 +12,7 @@ EOF
 
 create_script b <<-EOF
 dl fetcher cat cat
-dl add -o copied file_to_copy
+dl add -f cat -o copied file_to_copy
 EOF
 
 dl parse &&

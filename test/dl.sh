@@ -26,7 +26,9 @@ create_script() {
 		local script="$dir/.dl"
 
 		cat > "$script" <<-EOF
-		#!/bin/sh -eu
+		#!/usr/bin/env bash
+		set -eu
+		set -o pipefail
 		$(cat)
 		EOF
 		chmod +x "$script"

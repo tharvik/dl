@@ -10,5 +10,3 @@ const DownloadsDir = ConfigDir + "/downloads"
 
 const DownloadFetcherFileName = "fetcher"
 const DownloadArgumentsFileName = "arguments"
-
-// TODO needed? const SocketPath = ConfigDir + "/socket"
