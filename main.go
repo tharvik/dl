@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 )
 import "github.com/tharvik/dl/lib"
 
@@ -333,10 +334,16 @@ func main() {
 				err = fetch(logger, []string{})
 			}
 		} else {
-			if act, ok := jumpTable[flags.Args()[0]]; ok {
-				err = act(logger, flags.Args()[1:])
+			sub_name := flags.Args()[0]
+			sub_args := flags.Args()[1:]
+			if act, ok := jumpTable[sub_name]; ok {
+				err = act(logger, sub_args)
 			} else {
-				err = errors.New("unknown command")
+				sub_exec := filepath.Base(os.Args[0]) + "-" + sub_name
+				sub_args_with_argv0 := []string{sub_exec}
+				sub_args_with_argv0 = append(sub_args_with_argv0, sub_args...)
+				err = syscall.Exec(sub_exec, sub_args_with_argv0, os.Environ())
+				err = errPrefix(err, "as sub cmd exec")
 			}
 		}
 	}

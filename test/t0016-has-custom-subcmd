@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+dl extension &&
+	fail 'extension should not already exist' || :
+
+ln -s /bin/echo dl-extension
+export PATH="$PATH:$PWD"
+
+output=$(dl extension can have args ||
+	fail 'extension should exist')
+[ "$output" = 'can have args' ] ||
+	fail 'extension should pass args'
