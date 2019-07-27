@@ -19,7 +19,7 @@ func getEnvForTest() []string {
 	env := os.Environ()
 	for i, line := range env {
 		if strings.HasPrefix(line, "PATH=") {
-			env[i] = line + ":" + cwd
+			env[i] = "PATH=" + cwd + ":" + line[5:]
 			return env
 		}
 	}
