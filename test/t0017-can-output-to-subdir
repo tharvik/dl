@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+create_script <<EOF
+dl fetcher echo echo
+dl add -f echo -o a/b/c
+EOF
+
+dl
+
+[ -e a/b/c ] ||
+	fail 'file should be created'

@@ -244,7 +244,15 @@ func fetch(logger *log.Logger, args []string) error {
 
 				fmt.Println(">>", dl.Name)
 
-				output, err := os.Create(filepath.Join(prefix, dl.Name))
+				outputPath := filepath.Join(prefix, dl.Name)
+
+				err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
+				if err != nil {
+					dlRet <- errPrefix(err, prefix, dl.Name)
+					return
+				}
+
+				output, err := os.Create(outputPath)
 				if err != nil {
 					dlRet <- errPrefix(err, prefix, dl.Name)
 					return

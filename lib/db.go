@@ -138,7 +138,7 @@ func (db DB) AddDownload(dl Download) error {
 
 	// output
 	downloadPath := filepath.Join(dlsDir, dl.Name)
-	if err := os.Mkdir(downloadPath, os.ModePerm); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(downloadPath, os.ModePerm); err != nil && !os.IsExist(err) {
 		return err
 	}
 
@@ -180,20 +180,25 @@ func (db DB) GetDownloads() ([]Download, error) {
 		return nil, err
 	}
 
-	dirs, err := ioutil.ReadDir(dlsDir)
-	if err != nil {
-		return nil, err
-	}
-
-	dls := make([]Download, len(dirs))
-	for i, dir := range dirs {
-		dlDir := filepath.Join(dlsDir, dir.Name())
-
+	getDownloadNotFoundError := errors.New("unable to find any file to parse")
+	getDownload := func(name string) (*Download, error) {
+		dlDir := filepath.Join(dlsDir, name)
 		dlFetcherPath := filepath.Join(dlDir, DownloadFetcherFileName)
-		dlFetcherFile, err := os.Open(dlFetcherPath)
-		if err != nil {
-			return nil, err
+		dlFetcherFile, errOpenFetcher := os.Open(dlFetcherPath)
+		if errOpenFetcher != nil && !os.IsNotExist(errOpenFetcher) {
+			return nil, errOpenFetcher
 		}
+
+		dlArgsPath := filepath.Join(dlDir, DownloadArgumentsFileName)
+		dlArgs, errOpenArgs := readArguments(dlArgsPath)
+		if errOpenArgs != nil && !os.IsNotExist(errOpenArgs) {
+			return nil, errOpenArgs
+		}
+
+		if errOpenFetcher != nil && errOpenArgs != nil {
+			return nil, getDownloadNotFoundError
+		}
+
 		defer dlFetcherFile.Close()
 
 		dlFetcherRaw := make([]byte, 256)
@@ -208,16 +213,40 @@ func (db DB) GetDownloads() ([]Download, error) {
 			return nil, err
 		}
 
-		dlArgsPath := filepath.Join(dlDir, DownloadArgumentsFileName)
-		dlArgs, err := readArguments(dlArgsPath)
+		return &Download{name, fetcher, dlArgs}, nil
+	}
+
+	var getDownloadsInDlsDir func(string) ([]Download, error)
+	getDownloadsInDlsDir = func(name string) ([]Download, error) {
+		dlDir := filepath.Join(dlsDir, name)
+		dirs, err := ioutil.ReadDir(dlDir)
 		if err != nil {
 			return nil, err
 		}
 
-		dls[i] = Download{dir.Name(), fetcher, dlArgs}
+		dls := make([]Download, 0, len(dirs))
+		for _, dir := range dirs {
+			dlName := filepath.Join(name, dir.Name())
+
+			dl, err := getDownload(dlName)
+			if err == getDownloadNotFoundError {
+				subs, err := getDownloadsInDlsDir(dlName)
+				if err != nil {
+					return nil, err
+				}
+
+				dls = append(dls, subs...)
+			} else if err != nil {
+				return nil, err
+			} else {
+				dls = append(dls, *dl)
+			}
+		}
+
+		return dls, nil
 	}
 
-	return dls, nil
+	return getDownloadsInDlsDir("")
 }
 
 func (db DB) DelDownload(dl Download) error {
