@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+ln -s /bin/echo dl-echo
+export PATH="$PATH:$PWD"
+
+dl gen echo something
+
+[ "$(./.dl with args)" = "something with args" ]

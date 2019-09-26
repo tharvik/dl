@@ -307,6 +307,12 @@ func save(_ *log.Logger, args []string) error {
 	return errPrefix(db.SetState(args), "save")
 }
 
+func gen(logger *log.Logger, args []string) error {
+	self_name := filepath.Base(os.Args[0])
+	script := "#!/bin/sh\n\nexec " + self_name + " " + strings.Join(args, " ") + " \"$@\""
+	return ioutil.WriteFile(".dl", []byte(script), 0755)
+}
+
 type NopWriter struct{}
 
 func (NopWriter) Write(p []byte) (int, error) {
@@ -320,6 +326,7 @@ func main() {
 		"fetch":   fetch,
 		"fetcher": fetcher,
 		"save":    save,
+		"gen":     gen,
 	}
 
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
