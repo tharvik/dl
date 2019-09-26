@@ -354,11 +354,14 @@ func main() {
 			if act, ok := jumpTable[sub_name]; ok {
 				err = act(logger, sub_args)
 			} else {
-				sub_exec := filepath.Base(os.Args[0]) + "-" + sub_name
-				sub_args_with_argv0 := []string{sub_exec}
-				sub_args_with_argv0 = append(sub_args_with_argv0, sub_args...)
-				err = syscall.Exec(sub_exec, sub_args_with_argv0, os.Environ())
-				err = errPrefix(err, "as sub cmd exec")
+				var sub_exec string
+				sub_exec, err = exec.LookPath(filepath.Base(os.Args[0]) + "-" + sub_name)
+				if err == nil {
+					sub_args_with_argv0 := []string{sub_exec}
+					sub_args_with_argv0 = append(sub_args_with_argv0, sub_args...)
+					err = syscall.Exec(sub_exec, sub_args_with_argv0, os.Environ())
+				}
+				err = errPrefix(err, "sub cmd exec")
 			}
 		}
 	}
