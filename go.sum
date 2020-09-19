@@ -1,0 +1,4 @@
+github.com/tharvik/flock v0.7.1 h1:6uGUy+2ivA6blZgCq1043Dtk8jgGsW15QiyC5xxdGos=
+github.com/tharvik/flock v0.7.1/go.mod h1:52cNm86j1ZTo8YS9EhEMxl6cnxdoNMnq6KyLYIEKIbA=
+github.com/tharvik/flock v0.7.2-0.20190402104214-51b63c96677d h1:TCpFuGOFHXFEeVcT2vfVdiaC9uQIXMV+zQpzeltsElM=
+github.com/tharvik/flock v0.7.2-0.20190402104214-51b63c96677d/go.mod h1:52cNm86j1ZTo8YS9EhEMxl6cnxdoNMnq6KyLYIEKIbA=

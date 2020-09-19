@@ -13,8 +13,9 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+
+	"github.com/tharvik/dl/internal"
 )
-import "github.com/tharvik/dl/lib"
 
 type JobServer chan int
 
@@ -45,7 +46,7 @@ func add(_ *log.Logger, args []string) error {
 
 	fmt.Println("++", *output)
 
-	db, err := lib.NewDB(".")
+	db, err := internal.NewDB(".")
 	if err != nil {
 		return errPrefix(err, "add")
 	}
@@ -55,7 +56,7 @@ func add(_ *log.Logger, args []string) error {
 		return errPrefix(err, "add")
 	}
 
-	dl := lib.Download{
+	dl := internal.Download{
 		Name:      *output,
 		Fetcher:   fetcher,
 		Arguments: flags.Args(),
@@ -68,12 +69,12 @@ func fetcher(_ *log.Logger, args []string) error {
 		return errors.New("fetcher: need <name> and <args..>")
 	}
 
-	db, err := lib.NewDB(".")
+	db, err := internal.NewDB(".")
 	if err != nil {
 		return errPrefix(err, "fetcher")
 	}
 
-	fetcher := lib.Fetcher{
+	fetcher := internal.Fetcher{
 		Name:      args[0],
 		Arguments: args[1:],
 	}
@@ -148,7 +149,7 @@ func parse(logger *log.Logger, args []string) error {
 	ret := recurseBelow(".", func(ret chan error, prefix string) bool {
 		logger.Printf("parse: recurse %s: entry", prefix)
 
-		_, err := os.Stat(filepath.Join(prefix, lib.ScriptFile))
+		_, err := os.Stat(filepath.Join(prefix, internal.ScriptFile))
 		if err != nil {
 			if os.IsNotExist(err) {
 				logger.Printf("parse: recurse %s: missing script", prefix)
@@ -158,7 +159,7 @@ func parse(logger *log.Logger, args []string) error {
 			return false
 		}
 
-		db, err := lib.NewDB(prefix)
+		db, err := internal.NewDB(prefix)
 		if err != nil {
 			ret <- errPrefix(err, prefix)
 			return false
@@ -175,7 +176,7 @@ func parse(logger *log.Logger, args []string) error {
 
 		fmt.Println("~~", prefix)
 
-		cmd := exec.Command("./"+lib.ScriptFile, args...)
+		cmd := exec.Command("./"+internal.ScriptFile, args...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Dir = prefix
@@ -211,7 +212,7 @@ func fetch(logger *log.Logger, args []string) error {
 
 	js := make(JobServer, *jobs)
 	ret := recurseBelow(".", func(ret chan error, prefix string) bool {
-		_, err := os.Stat(filepath.Join(prefix, lib.ScriptFile))
+		_, err := os.Stat(filepath.Join(prefix, internal.ScriptFile))
 		if err != nil {
 			if os.IsNotExist(err) {
 				return true
@@ -220,7 +221,7 @@ func fetch(logger *log.Logger, args []string) error {
 			return false
 		}
 
-		db, err := lib.NewDB(prefix)
+		db, err := internal.NewDB(prefix)
 		if err != nil {
 			ret <- errPrefix(err, prefix)
 			return false
@@ -236,7 +237,7 @@ func fetch(logger *log.Logger, args []string) error {
 		for i, dl := range dls {
 			dlRet := make(chan error)
 			rets[i] = dlRet
-			go func(dl lib.Download) {
+			go func(dl internal.Download) {
 				defer close(dlRet)
 
 				token := <-js
@@ -300,7 +301,7 @@ func fetch(logger *log.Logger, args []string) error {
 }
 
 func save(_ *log.Logger, args []string) error {
-	db, err := lib.NewDB(".")
+	db, err := internal.NewDB(".")
 	if err != nil {
 		return errPrefix(err, "save")
 	}

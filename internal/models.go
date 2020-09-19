@@ -1,4 +1,4 @@
-package lib
+package internal
 
 type Fetcher struct {
 	Name      string

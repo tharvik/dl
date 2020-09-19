@@ -7,7 +7,7 @@ readonly JOBS=$(($(nproc) * 10))
 create_script <<-EOF
 for i in \$(seq 10)
 do
-	dl fetcher echoer\$i echo \$i &
+	dl fetcher echoer\$i echo &
 	dl add -f echoer\$i -o echoed\$i \$i &
 done
 for i in \$(seq 20)
@@ -28,5 +28,5 @@ done
 
 for i in $(seq 10)
 do
-	echo $i $i | cmp echoed$i
+	echo $i | cmp echoed$i
 done

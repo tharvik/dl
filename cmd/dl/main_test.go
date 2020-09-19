@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-const TestDir = "test"
+const TestDir = "testdata"
 
 func getEnvForTest() []string {
 	cwd, err := os.Getwd()
@@ -27,7 +27,7 @@ func getEnvForTest() []string {
 	return append(env, "PATH="+cwd)
 }
 
-func TestShell(t *testing.T) {
+func TestExec(t *testing.T) {
 	tests, err := ioutil.ReadDir(TestDir)
 	if err != nil {
 		panic(err)
@@ -40,7 +40,9 @@ func TestShell(t *testing.T) {
 			continue
 		}
 
-		t.Run(test.Name(), func(tt *testing.T) {
+		t.Run(test.Name(), func(t *testing.T) {
+			//t.Parallel()
+
 			cmd := exec.Command("./" + test.Name())
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stdout
@@ -49,7 +51,7 @@ func TestShell(t *testing.T) {
 
 			err := cmd.Run()
 			if err != nil {
-				tt.Fatal(err)
+				t.Fatal(err)
 			}
 		})
 	}
