@@ -19,41 +19,33 @@ import (
 
 type JobServer chan int
 
-func errPrefix(err error, prefixes ...string) error {
-	if err == nil {
-		return nil
-	}
-	prefixes = append(prefixes, err.Error())
-	return errors.New(strings.Join(prefixes, ": "))
-}
-
 func add(_ *log.Logger, args []string) error {
 	flags := flag.NewFlagSet("add", flag.ContinueOnError)
 	output := flags.String("o", "", "output filename")
 	fetcherName := flags.String("f", "", "fetcher name")
 
 	if err := flags.Parse(args); err != nil {
-		return errPrefix(err, "add")
+		return fmt.Errorf("flags parse: %v", err)
 	}
 
 	if *output == "" {
-		return errors.New("add: no output specified")
+		return errors.New("no output specified")
 	}
 
 	if *fetcherName == "" {
-		return errors.New("add: no fetcher specified")
+		return errors.New("no fetcher specified")
 	}
 
 	fmt.Println("++", *output)
 
 	db, err := internal.NewDB(".")
 	if err != nil {
-		return errPrefix(err, "add")
+		return fmt.Errorf("new db: %v", err)
 	}
 
 	fetcher, err := db.GetFetcher(*fetcherName)
 	if err != nil {
-		return errPrefix(err, "add")
+		return fmt.Errorf("get fetcher: %v", err)
 	}
 
 	dl := internal.Download{
@@ -61,24 +53,32 @@ func add(_ *log.Logger, args []string) error {
 		Fetcher:   fetcher,
 		Arguments: flags.Args(),
 	}
-	return errPrefix(db.AddDownload(dl), "add")
+	if err := db.AddDownload(dl); err != nil {
+		return fmt.Errorf("add download: %v", err)
+	}
+
+	return nil
 }
 
 func fetcher(_ *log.Logger, args []string) error {
 	if len(args) < 2 {
-		return errors.New("fetcher: need <name> and <args..>")
+		return errors.New("need <name> and <args..>")
 	}
 
 	db, err := internal.NewDB(".")
 	if err != nil {
-		return errPrefix(err, "fetcher")
+		return fmt.Errorf("new db: %v", err)
 	}
 
 	fetcher := internal.Fetcher{
 		Name:      args[0],
 		Arguments: args[1:],
 	}
-	return errPrefix(db.AddFetcher(fetcher), "fetcher")
+	if err := db.AddFetcher(fetcher); err != nil {
+		return fmt.Errorf("add fetcher: %v", err)
+	}
+
+	return nil
 }
 
 func drainInto(d chan error, chans []chan error) {
@@ -111,7 +111,7 @@ func recurseBelow(prefix string, act func(chan error, string) bool) chan error {
 
 		files, err := ioutil.ReadDir(prefix)
 		if err != nil {
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			close(ret)
 			return
 		}
@@ -142,7 +142,7 @@ func parse(logger *log.Logger, args []string) error {
 	jobs := flags.Int("j", runtime.NumCPU(), "jobs")
 
 	if err := flags.Parse(args); err != nil {
-		return errPrefix(err, "parse")
+		return fmt.Errorf("flags parse: %v", err)
 	}
 
 	js := make(JobServer, *jobs)
@@ -155,19 +155,19 @@ func parse(logger *log.Logger, args []string) error {
 				logger.Printf("parse: recurse %s: missing script", prefix)
 				return true
 			}
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
 		db, err := internal.NewDB(prefix)
 		if err != nil {
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
 		args, err := db.GetState()
 		if err != nil {
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
@@ -181,7 +181,7 @@ func parse(logger *log.Logger, args []string) error {
 		cmd.Stderr = os.Stderr
 		cmd.Dir = prefix
 		if err := cmd.Run(); err != nil {
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
@@ -192,10 +192,10 @@ func parse(logger *log.Logger, args []string) error {
 		js <- i
 	}
 
-	var firsterr error = nil
+	var firsterr error
 	for err := range ret {
 		if firsterr == nil {
-			firsterr = errPrefix(err, "parse")
+			firsterr = err
 		}
 	}
 
@@ -207,7 +207,7 @@ func fetch(logger *log.Logger, args []string) error {
 	jobs := flags.Int("j", runtime.NumCPU(), "jobs")
 
 	if err := flags.Parse(args); err != nil {
-		return errPrefix(err, "fetch")
+		return fmt.Errorf("flags parse: %v", err)
 	}
 
 	js := make(JobServer, *jobs)
@@ -217,19 +217,19 @@ func fetch(logger *log.Logger, args []string) error {
 			if os.IsNotExist(err) {
 				return true
 			}
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
 		db, err := internal.NewDB(prefix)
 		if err != nil {
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
 		dls, err := db.GetDownloads()
 		if err != nil {
-			ret <- errPrefix(err, prefix)
+			ret <- fmt.Errorf("%v: %v", prefix, err)
 			return false
 		}
 
@@ -249,13 +249,13 @@ func fetch(logger *log.Logger, args []string) error {
 
 				err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
 				if err != nil {
-					dlRet <- errPrefix(err, prefix, dl.Name)
+					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
 					return
 				}
 
 				output, err := os.Create(outputPath)
 				if err != nil {
-					dlRet <- errPrefix(err, prefix, dl.Name)
+					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
 					return
 				}
 
@@ -270,13 +270,13 @@ func fetch(logger *log.Logger, args []string) error {
 				logger.Printf("fetch: recurse %s: running \"%s\"", prefix, strings.Join(cmdArgs, " "))
 				err = cmd.Run()
 				if err != nil {
-					dlRet <- errPrefix(err, prefix, dl.Name)
+					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
 					return
 				}
 
 				err = db.DelDownload(dl)
 				if err != nil {
-					dlRet <- errPrefix(err, prefix, dl.Name)
+					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
 					return
 				}
 			}(dl)
@@ -293,7 +293,7 @@ func fetch(logger *log.Logger, args []string) error {
 	var reterr error = nil
 	for err := range ret {
 		if reterr == nil {
-			reterr = errPrefix(err, "fetch")
+			reterr = err
 		}
 	}
 
@@ -303,9 +303,14 @@ func fetch(logger *log.Logger, args []string) error {
 func save(_ *log.Logger, args []string) error {
 	db, err := internal.NewDB(".")
 	if err != nil {
-		return errPrefix(err, "save")
+		return fmt.Errorf("new db: %v", err)
 	}
-	return errPrefix(db.SetState(args), "save")
+
+	if err := db.SetState(args); err != nil {
+		return fmt.Errorf("set state: %v", err)
+	}
+
+	return nil
 }
 
 func gen(logger *log.Logger, args []string) error {
@@ -353,16 +358,22 @@ func main() {
 			sub_name := flags.Args()[0]
 			sub_args := flags.Args()[1:]
 			if act, ok := jumpTable[sub_name]; ok {
-				err = act(logger, sub_args)
+				if err = act(logger, sub_args); err != nil {
+					err = fmt.Errorf("%v: %v", sub_name, err)
+				}
 			} else {
+				sub_name := filepath.Base(os.Args[0]) + "-" + sub_name
 				var sub_exec string
-				sub_exec, err = exec.LookPath(filepath.Base(os.Args[0]) + "-" + sub_name)
-				if err == nil {
+				sub_exec, err = exec.LookPath(sub_name)
+				if err != nil {
+					err = fmt.Errorf("whereis '%v' : %v", sub_name, err)
+				} else {
 					sub_args_with_argv0 := []string{sub_exec}
 					sub_args_with_argv0 = append(sub_args_with_argv0, sub_args...)
-					err = syscall.Exec(sub_exec, sub_args_with_argv0, os.Environ())
+					if err = syscall.Exec(sub_exec, sub_args_with_argv0, os.Environ()); err != nil {
+						err = fmt.Errorf("exec '%v': %v", sub_name, err)
+					}
 				}
-				err = errPrefix(err, "sub cmd exec")
 			}
 		}
 	}
