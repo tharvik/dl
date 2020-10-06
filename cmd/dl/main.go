@@ -17,7 +17,7 @@ import (
 	"github.com/tharvik/dl/internal"
 )
 
-type JobServer chan int
+type JobServer chan struct{}
 
 func add(_ *log.Logger, args []string) error {
 	flags := flag.NewFlagSet("add", flag.ContinueOnError)
@@ -189,7 +189,7 @@ func parse(logger *log.Logger, args []string) error {
 	})
 
 	for i := 0; i < *jobs; i++ {
-		js <- i
+		js <- struct{}{}
 	}
 
 	var firsterr error
@@ -287,7 +287,7 @@ func fetch(logger *log.Logger, args []string) error {
 	})
 
 	for i := 0; i < *jobs; i++ {
-		js <- i
+		js <- struct{}{}
 	}
 
 	var reterr error = nil
