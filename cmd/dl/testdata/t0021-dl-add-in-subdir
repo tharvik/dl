@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+create_script <<-EOF
+mkdir subdir
+cd subdir
+
+dl fetcher echoer echo
+dl add -f echoer -o echoed to_echo
+EOF
+
+dl
+
+echo to_echo | cmp subdir/echoed

@@ -212,7 +212,7 @@ func fetch(logger *log.Logger, args []string) error {
 
 	js := make(JobServer, *jobs)
 	ret := recurseBelow(".", func(ret chan error, prefix string) bool {
-		_, err := os.Stat(filepath.Join(prefix, internal.ScriptFile))
+		_, err := os.Stat(filepath.Join(prefix, internal.ConfigDir))
 		if err != nil {
 			if os.IsNotExist(err) {
 				return true
