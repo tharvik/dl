@@ -9,9 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/tharvik/dl/internal"
@@ -81,62 +81,6 @@ func fetcher(_ *log.Logger, args []string) error {
 	return nil
 }
 
-func drainInto(d chan error, chans []chan error) {
-	cases := make([]reflect.SelectCase, len(chans))
-	for i, ch := range chans {
-		cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(ch)}
-	}
-
-	for len(cases) > 0 {
-		chosen, value, ok := reflect.Select(cases)
-		if ok {
-			d <- value.Interface().(error)
-		} else {
-			cases = append(cases[:chosen], cases[chosen+1:]...)
-		}
-	}
-}
-
-// act:	return errs on chan; if !ret, stop process
-func recurseBelow(prefix string, act func(chan error, string) bool) chan error {
-	ret := make(chan error)
-
-	var rec func(chan error, string)
-	rec = func(ret chan error, prefix string) {
-		cont := act(ret, prefix)
-		if !cont {
-			close(ret)
-			return
-		}
-
-		files, err := ioutil.ReadDir(prefix)
-		if err != nil {
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			close(ret)
-			return
-		}
-
-		rets := make([]chan error, 0)
-		for _, f := range files {
-			if !f.IsDir() || strings.HasPrefix(f.Name(), ".") {
-				continue
-			}
-
-			recRet := make(chan error)
-			recPrefix := filepath.Join(prefix, f.Name())
-			go rec(recRet, recPrefix)
-
-			rets = append(rets, recRet)
-		}
-
-		drainInto(ret, rets)
-		close(ret)
-	}
-	go rec(ret, prefix)
-
-	return ret
-}
-
 func parse(logger *log.Logger, args []string) error {
 	flags := flag.NewFlagSet("parse", flag.ContinueOnError)
 	jobs := flags.Int("j", runtime.NumCPU(), "jobs")
@@ -146,29 +90,26 @@ func parse(logger *log.Logger, args []string) error {
 	}
 
 	js := make(JobServer, *jobs)
-	ret := recurseBelow(".", func(ret chan error, prefix string) bool {
+	ret := recurseBelow(true, ".", func(prefix string) error {
 		logger.Printf("parse: recurse %s: entry", prefix)
 
 		_, err := os.Stat(filepath.Join(prefix, internal.ScriptFile))
 		if err != nil {
 			if os.IsNotExist(err) {
 				logger.Printf("parse: recurse %s: missing script", prefix)
-				return true
+				return nil
 			}
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
 		db, err := internal.NewDB(prefix)
 		if err != nil {
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
 		args, err := db.GetState()
 		if err != nil {
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
 		token := <-js
@@ -181,11 +122,10 @@ func parse(logger *log.Logger, args []string) error {
 		cmd.Stderr = os.Stderr
 		cmd.Dir = prefix
 		if err := cmd.Run(); err != nil {
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
-		return true
+		return nil
 	})
 
 	for i := 0; i < *jobs; i++ {
@@ -211,79 +151,82 @@ func fetch(logger *log.Logger, args []string) error {
 	}
 
 	js := make(JobServer, *jobs)
-	ret := recurseBelow(".", func(ret chan error, prefix string) bool {
+	ret := recurseBelow(false, ".", func(prefix string) error {
 		_, err := os.Stat(filepath.Join(prefix, internal.ConfigDir))
 		if err != nil {
 			if os.IsNotExist(err) {
-				return true
+				return nil
 			}
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
 		db, err := internal.NewDB(prefix)
 		if err != nil {
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
 		dls, err := db.GetDownloads()
 		if err != nil {
-			ret <- fmt.Errorf("%v: %v", prefix, err)
-			return false
+			return fmt.Errorf("%v: %v", prefix, err)
 		}
 
-		rets := make([]chan error, len(dls))
-		for i, dl := range dls {
-			dlRet := make(chan error)
-			rets[i] = dlRet
+		wg := sync.WaitGroup{}
+		wg.Add(len(dls))
+		ret := make(chan error, len(dls))
+		for _, dl := range dls {
 			go func(dl internal.Download) {
-				defer close(dlRet)
+				defer wg.Done()
 
 				token := <-js
 				defer func() { js <- token }()
 
-				fmt.Println(">>", dl.Name)
+				if err := func() error {
+					fmt.Println(">>", dl.Name)
 
-				outputPath := filepath.Join(prefix, dl.Name)
+					outputPath := filepath.Join(prefix, dl.Name)
 
-				err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm)
-				if err != nil {
-					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
-					return
-				}
+					if err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm); err != nil {
+						return fmt.Errorf("%v: %v", err, dl.Name)
+					}
 
-				output, err := os.Create(outputPath)
-				if err != nil {
-					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
-					return
-				}
+					output, err := os.Create(outputPath)
+					if err != nil {
+						return fmt.Errorf("%v: %v", err, dl.Name)
+					}
+					defer output.Close()
 
-				cmdArgs := make([]string, 0, len(dl.Fetcher.Arguments)+len(dl.Arguments))
-				cmdArgs = append(cmdArgs, dl.Fetcher.Arguments...)
-				cmdArgs = append(cmdArgs, dl.Arguments...)
+					cmdArgs := make([]string, 0, len(dl.Fetcher.Arguments)+len(dl.Arguments))
+					cmdArgs = append(cmdArgs, dl.Fetcher.Arguments...)
+					cmdArgs = append(cmdArgs, dl.Arguments...)
 
-				cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
-				cmd.Stdout = output
-				cmd.Stderr = os.Stderr
-				cmd.Dir = prefix
-				logger.Printf("fetch: recurse %s: running \"%s\"", prefix, strings.Join(cmdArgs, " "))
-				err = cmd.Run()
-				if err != nil {
-					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
-					return
-				}
+					cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
+					cmd.Stdout = output
+					cmd.Stderr = os.Stderr
+					cmd.Dir = prefix
+					logger.Printf("running \"%s\"", strings.Join(cmdArgs, " "))
+					if err := cmd.Run(); err != nil {
+						return fmt.Errorf("%v: %v", err, dl.Name)
+					}
 
-				err = db.DelDownload(dl)
-				if err != nil {
-					dlRet <- fmt.Errorf("%v: %v: %v", prefix, err, dl.Name)
-					return
+					if err := db.DelDownload(dl); err != nil {
+						return fmt.Errorf("%v: %v", err, dl.Name)
+					}
+
+					return nil
+				}(); err != nil {
+					ret <- err
 				}
 			}(dl)
 		}
 
-		drainInto(ret, rets)
-		return true
+		wg.Wait()
+		close(ret)
+
+		for err := range ret {
+			return err
+		}
+
+		return nil
 	})
 
 	for i := 0; i < *jobs; i++ {

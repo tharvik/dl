@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+readonly JOBS=$(($(nproc) * 10000))
+
+create_script <<-EOF
+dl fetcher echoer echo
+for i in \$(seq $JOBS)
+do
+	dl add -f echoer -o echoed\$i \$i
+done
+EOF
+
+dl
+
+for i in $(seq $JOBS)
+do
+	echo $i | cmp echoed$i
+done
