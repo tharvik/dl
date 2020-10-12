@@ -5,12 +5,12 @@
 readonly JOBS=$(($(nproc) * 10))
 
 create_script <<-EOF
-for i in \$(seq 10)
+for i in \$(seq 40)
 do
-	dl fetcher echoer\$i echo &
-	dl add -f echoer\$i -o echoed\$i \$i &
+	( dl fetcher echoer\$i echo &&
+	  dl add -f echoer\$i -o echoed\$i \$i ) &
 done
-for i in \$(seq 20)
+for i in \$(seq 40)
 do
 	wait -n
 done
@@ -26,7 +26,7 @@ do
 	wait -n
 done
 
-for i in $(seq 10)
+for i in $(seq 40)
 do
 	echo $i | cmp echoed$i
 done

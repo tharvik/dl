@@ -4,18 +4,14 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 const TestDir = "testdata"
 
-func getEnvForTest() []string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-
+func getEnvForTest(cwd string) []string {
 	env := os.Environ()
 	for i, line := range env {
 		if strings.HasPrefix(line, "PATH=") {
@@ -33,24 +29,29 @@ func TestExec(t *testing.T) {
 		panic(err)
 	}
 
-	testEnv := getEnvForTest()
+	cwd, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+
+	testEnv := getEnvForTest(cwd)
 
 	for _, test := range tests {
 		if test.Mode()&0100 == 0 || test.IsDir() {
 			continue
 		}
 
-		t.Run(test.Name(), func(t *testing.T) {
-			//t.Parallel()
+		testName := test.Name()
+		t.Run(testName, func(t *testing.T) {
+			t.Parallel()
 
-			cmd := exec.Command("./" + test.Name())
+			cmd := exec.Command("./" + testName)
 			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stdout
+			cmd.Stderr = os.Stderr
 			cmd.Env = testEnv
-			cmd.Dir = TestDir
+			cmd.Dir = filepath.Join(cwd, TestDir)
 
-			err := cmd.Run()
-			if err != nil {
+			if err := cmd.Run(); err != nil {
 				t.Fatal(err)
 			}
 		})

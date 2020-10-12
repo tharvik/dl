@@ -2,9 +2,5 @@
 
 . ./dl.sh
 
-create_script <<-EOF
-dl add nothing
-EOF
-
-dl &&
-	fail 'missing fetcher should fail fetch' || :
+dl add -o output nothing &&
+	fail 'dl add without fetcher should fail' || :
