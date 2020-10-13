@@ -96,7 +96,7 @@ func writeArguments(path string, arguments []string) error {
 func readArguments(path string) ([]string, error) {
 	raw, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read file: %v", err)
+		return nil, fmt.Errorf("read file: %w", err)
 	}
 
 	return unpackArguments(raw)
@@ -177,26 +177,14 @@ func (db DB) GetDownloads() ([]Download, error) {
 		return nil, fmt.Errorf("lock downloads dir: %v", err)
 	}
 
-	getDownloadNotFoundError := errors.New("unable to find any file to parse")
 	getDownload := func(name string) (*Download, error) {
 		dlDir := filepath.Join(dlsDir, name)
 		dlFetcherPath := filepath.Join(dlDir, DownloadFetcherFileName)
-		dlFetcherFile, errOpenFetcher := os.Open(dlFetcherPath)
-		if errOpenFetcher != nil {
-			if !os.IsNotExist(errOpenFetcher) {
-				return nil, fmt.Errorf("open fetcher file: %v", errOpenFetcher)
-			}
-		} else {
-			defer dlFetcherFile.Close()
-		}
 
 		dlArgsPath := filepath.Join(dlDir, DownloadArgumentsFileName)
-		dlArgs, errOpenArgs := readArguments(dlArgsPath)
-		if errOpenArgs != nil && !os.IsNotExist(errOpenArgs) {
-			return nil, fmt.Errorf("read arguments: %v", errOpenArgs)
-		}
-		if errOpenFetcher != nil && errOpenArgs != nil {
-			return nil, getDownloadNotFoundError
+		dlArgs, err := readArguments(dlArgsPath)
+		if err != nil {
+			return nil, fmt.Errorf("read arguments: %w", err)
 		}
 
 		dlFetcherRaw := make([]byte, 256)
@@ -227,10 +215,10 @@ func (db DB) GetDownloads() ([]Download, error) {
 			dlName := filepath.Join(name, dir.Name())
 
 			dl, err := getDownload(dlName)
-			if errors.Is(err, getDownloadNotFoundError) {
+			if errors.Is(err, os.ErrNotExist) {
 				subs, err := getDownloadsInDlsDir(dlName)
 				if err != nil {
-					return nil, fmt.Errorf("get downloads in downloads dir: %v", err)
+					return nil, err
 				}
 
 				dls = append(dls, subs...)
