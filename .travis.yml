@@ -1,1 +1,6 @@
 language: go
+go:
+  - 1.15
+  - master
+
+before_script: cd cmd/dl && go build
