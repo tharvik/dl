@@ -3,4 +3,5 @@ go:
   - 1.15
   - master
 
-before_script: cd cmd/dl && go build
+before_script: go build ./cmd/dl
+script: PATH=$PWD:$PATH go test ./...
