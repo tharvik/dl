@@ -99,17 +99,17 @@ func parse(logger *log.Logger, args []string) error {
 				logger.Printf("parse: recurse %s: missing script", prefix)
 				return nil
 			}
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("stat script: %v", err)
 		}
 
 		db, err := internal.NewDB(prefix)
 		if err != nil {
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("new db: %v", err)
 		}
 
 		args, err := db.GetState()
 		if err != nil {
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("get state: %v", err)
 		}
 
 		token := <-js
@@ -122,7 +122,7 @@ func parse(logger *log.Logger, args []string) error {
 		cmd.Stderr = os.Stderr
 		cmd.Dir = prefix
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("run script: %v", err)
 		}
 
 		return nil
@@ -157,17 +157,17 @@ func fetch(logger *log.Logger, args []string) error {
 			if os.IsNotExist(err) {
 				return nil
 			}
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("stat config dir: %v", err)
 		}
 
 		db, err := internal.NewDB(prefix)
 		if err != nil {
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("new db: %v", err)
 		}
 
 		dls, err := db.GetDownloads()
 		if err != nil {
-			return fmt.Errorf("%v: %v", prefix, err)
+			return fmt.Errorf("get downloads: %v", err)
 		}
 
 		wg := sync.WaitGroup{}
@@ -186,12 +186,12 @@ func fetch(logger *log.Logger, args []string) error {
 					outputPath := filepath.Join(prefix, dl.Name)
 
 					if err := os.MkdirAll(filepath.Dir(outputPath), os.ModePerm); err != nil {
-						return fmt.Errorf("%v: %v", err, dl.Name)
+						return fmt.Errorf("mkdir output: %v: %v", dl.Name, err)
 					}
 
 					output, err := os.Create(outputPath)
 					if err != nil {
-						return fmt.Errorf("%v: %v", err, dl.Name)
+						return fmt.Errorf("create output: %v: %v", dl.Name, err)
 					}
 					defer output.Close()
 
@@ -203,13 +203,13 @@ func fetch(logger *log.Logger, args []string) error {
 					cmd.Stdout = output
 					cmd.Stderr = os.Stderr
 					cmd.Dir = prefix
-					logger.Printf("running \"%s\"", strings.Join(cmdArgs, " "))
+					logger.Printf("fetch: %v: running \"%s\"", prefix, strings.Join(cmdArgs, " "))
 					if err := cmd.Run(); err != nil {
-						return fmt.Errorf("%v: %v", err, dl.Name)
+						return fmt.Errorf("run fetcher: %v: %v", dl.Name, err)
 					}
 
 					if err := db.DelDownload(dl); err != nil {
-						return fmt.Errorf("%v: %v", err, dl.Name)
+						return fmt.Errorf("delete download: %v: %v", dl.Name, err)
 					}
 
 					return nil
@@ -293,9 +293,12 @@ func main() {
 		}
 
 		if len(flags.Args()) == 0 {
-			err = parse(logger, []string{})
-			if err == nil {
-				err = fetch(logger, []string{})
+			if err = parse(logger, []string{}); err != nil {
+				err = fmt.Errorf("parse: %v", err)
+			} else {
+				if err = fetch(logger, []string{}); err != nil {
+					err = fmt.Errorf("fetch: %v", err)
+				}
 			}
 		} else {
 			sub_name := flags.Args()[0]

@@ -36,22 +36,27 @@ func packArguments(args []string) []byte {
 	return buf.Bytes()
 }
 
-func unpackArguments(encoded []byte) (elems []string, err error) {
+func unpackArguments(encoded []byte) ([]string, error) {
+	// for empty state file created by flock
+	if len(encoded) == 0 {
+		return nil, nil
+	}
+
 	buf := bytes.NewBuffer(encoded)
 
 	var size uint32
-	if err = binary.Read(buf, binary.BigEndian, &size); err != nil {
-		return
+	if err := binary.Read(buf, binary.BigEndian, &size); err != nil {
+		return nil, fmt.Errorf("read size: %v", err)
 	}
 
 	elems_sizes := make([]uint32, size)
 	for i := uint32(0); i < size; i++ {
-		if err = binary.Read(buf, binary.BigEndian, &elems_sizes[i]); err != nil {
-			return
+		if err := binary.Read(buf, binary.BigEndian, &elems_sizes[i]); err != nil {
+			return nil, fmt.Errorf("read element %v: %v", i, err)
 		}
 	}
 
-	elems = make([]string, size)
+	elems := make([]string, size)
 
 	string_pool := buf.Bytes()
 	for i, elem_size := range elems_sizes {
@@ -81,7 +86,7 @@ func writeArgumentsWithFile(file *os.File, arguments []string) error {
 func writeArguments(path string, arguments []string) error {
 	file, err := os.Create(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("create: %v", err)
 	}
 	defer file.Close()
 
@@ -91,15 +96,13 @@ func writeArguments(path string, arguments []string) error {
 func readArguments(path string) ([]string, error) {
 	raw, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read file: %v", err)
 	}
 
 	return unpackArguments(raw)
 }
 
-type DB struct {
-	path string
-}
+type DB struct{ path string }
 
 func NewDB(prefix string) (DB, error) {
 	for _, dir := range []string{
@@ -109,19 +112,6 @@ func NewDB(prefix string) (DB, error) {
 	} {
 		if err := os.Mkdir(dir, os.ModePerm); err != nil && !os.IsExist(err) {
 			return DB{}, fmt.Errorf("mkdir %v: %v", dir, err)
-		}
-	}
-
-	stateFile, err := os.OpenFile(filepath.Join(prefix, StateFile), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0644)
-	if err != nil {
-		if !os.IsExist(err) {
-			return DB{}, fmt.Errorf("open state: %v", err)
-		}
-	} else {
-		defer stateFile.Close()
-
-		if err := writeArgumentsWithFile(stateFile, []string{}); err != nil {
-			return DB{}, fmt.Errorf("write arguments: %v", err)
 		}
 	}
 
@@ -170,7 +160,11 @@ func (db DB) AddDownload(dl Download) error {
 
 	// arguments
 	argumentsPath := filepath.Join(downloadPath, DownloadArgumentsFileName)
-	return writeArguments(argumentsPath, dl.Arguments)
+	if err := writeArguments(argumentsPath, dl.Arguments); err != nil {
+		return fmt.Errorf("write arguments: %v", err)
+	}
+
+	return nil
 }
 
 func (db DB) GetDownloads() ([]Download, error) {
@@ -180,7 +174,7 @@ func (db DB) GetDownloads() ([]Download, error) {
 	defer fileLock.Close()
 
 	if err := fileLock.RLock(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("lock downloads dir: %v", err)
 	}
 
 	getDownloadNotFoundError := errors.New("unable to find any file to parse")
@@ -190,7 +184,7 @@ func (db DB) GetDownloads() ([]Download, error) {
 		dlFetcherFile, errOpenFetcher := os.Open(dlFetcherPath)
 		if errOpenFetcher != nil {
 			if !os.IsNotExist(errOpenFetcher) {
-				return nil, errOpenFetcher
+				return nil, fmt.Errorf("open fetcher file: %v", errOpenFetcher)
 			}
 		} else {
 			defer dlFetcherFile.Close()
@@ -199,7 +193,7 @@ func (db DB) GetDownloads() ([]Download, error) {
 		dlArgsPath := filepath.Join(dlDir, DownloadArgumentsFileName)
 		dlArgs, errOpenArgs := readArguments(dlArgsPath)
 		if errOpenArgs != nil && !os.IsNotExist(errOpenArgs) {
-			return nil, errOpenArgs
+			return nil, fmt.Errorf("read arguments: %v", errOpenArgs)
 		}
 		if errOpenFetcher != nil && errOpenArgs != nil {
 			return nil, getDownloadNotFoundError
@@ -208,13 +202,13 @@ func (db DB) GetDownloads() ([]Download, error) {
 		dlFetcherRaw := make([]byte, 256)
 		size, err := syscall.Readlink(dlFetcherPath, dlFetcherRaw)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read link: %v", err)
 		}
 		dlFetcherName := filepath.Base(string(dlFetcherRaw[:size]))
 
 		fetcher, err := db.GetFetcher(dlFetcherName)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get fetcher: %v", err)
 		}
 
 		return &Download{name, fetcher, dlArgs}, nil
@@ -225,7 +219,7 @@ func (db DB) GetDownloads() ([]Download, error) {
 		dlDir := filepath.Join(dlsDir, name)
 		dirs, err := ioutil.ReadDir(dlDir)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read dir: %v", err)
 		}
 
 		dls := make([]Download, 0, len(dirs))
@@ -233,15 +227,15 @@ func (db DB) GetDownloads() ([]Download, error) {
 			dlName := filepath.Join(name, dir.Name())
 
 			dl, err := getDownload(dlName)
-			if err == getDownloadNotFoundError {
+			if errors.Is(err, getDownloadNotFoundError) {
 				subs, err := getDownloadsInDlsDir(dlName)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("get downloads in downloads dir: %v", err)
 				}
 
 				dls = append(dls, subs...)
 			} else if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("get download: %v", err)
 			} else {
 				dls = append(dls, *dl)
 			}
@@ -250,7 +244,12 @@ func (db DB) GetDownloads() ([]Download, error) {
 		return dls, nil
 	}
 
-	return getDownloadsInDlsDir("")
+	dls, err := getDownloadsInDlsDir("")
+	if err != nil {
+		return nil, fmt.Errorf("get downloads in downloads dir: %v", err)
+	}
+
+	return dls, nil
 }
 
 func (db DB) DelDownload(dl Download) error {
@@ -260,7 +259,7 @@ func (db DB) DelDownload(dl Download) error {
 	defer fileLock.Close()
 
 	if err := fileLock.Lock(); err != nil {
-		return err
+		return fmt.Errorf("lock downloads dir: %v", err)
 	}
 
 	dir := filepath.Join(db.path, DownloadsDir, dl.Name)
@@ -270,25 +269,29 @@ func (db DB) DelDownload(dl Download) error {
 		dir,
 	} {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return err
+			return fmt.Errorf("remove %v: %v", path, err)
 		}
 	}
 
 	return nil
 }
 
-func (db DB) GetFetcher(name string) (f Fetcher, err error) {
+func (db DB) GetFetcher(name string) (Fetcher, error) {
 	ftsDir := filepath.Join(db.path, FetchersDir)
 
 	fileLock := flock.New(ftsDir)
 	defer fileLock.Close()
 
-	if err = fileLock.RLock(); err != nil {
-		return
+	if err := fileLock.RLock(); err != nil {
+		return Fetcher{}, fmt.Errorf("lock fetcher dir: %v", err)
 	}
 
 	path := filepath.Join(db.path, FetchersDir, name)
 	args, err := readArguments(path)
+	if err != nil {
+		return Fetcher{}, fmt.Errorf("read arguments: %v", err)
+	}
+
 	return Fetcher{name, args}, nil
 }
 
@@ -300,10 +303,14 @@ func (db DB) AddFetcher(fetcher Fetcher) error {
 	defer fileLock.Close()
 
 	if err := fileLock.Lock(); err != nil {
-		return err
+		return fmt.Errorf("lock fetcher dir: %v", err)
 	}
 
-	return writeArguments(path, fetcher.Arguments)
+	if err := writeArguments(path, fetcher.Arguments); err != nil {
+		return fmt.Errorf("write arguments: %v", err)
+	}
+
+	return nil
 }
 
 func (db DB) GetState() ([]string, error) {
@@ -313,11 +320,15 @@ func (db DB) GetState() ([]string, error) {
 	defer fileLock.Close()
 
 	if err := fileLock.RLock(); err != nil {
-		return []string{}, err
+		return nil, fmt.Errorf("lock state file: %v", err)
 	}
 
 	args, err := readArguments(path)
-	return args, err
+	if err != nil {
+		return nil, fmt.Errorf("read arguments: %v", err)
+	}
+
+	return args, nil
 }
 
 func (db DB) SetState(args []string) error {
@@ -327,8 +338,12 @@ func (db DB) SetState(args []string) error {
 	defer fileLock.Close()
 
 	if err := fileLock.Lock(); err != nil {
-		return err
+		return fmt.Errorf("lock state file: %v", err)
 	}
 
-	return writeArguments(path, args)
+	if err := writeArguments(path, args); err != nil {
+		return fmt.Errorf("write arguments: %v", err)
+	}
+
+	return nil
 }
