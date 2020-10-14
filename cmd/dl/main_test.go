@@ -5,10 +5,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
 const TestDir = "testdata"
+const LongTestSuffix = "_long"
 
 func TestExec(t *testing.T) {
 	cwd, err := os.Getwd()
@@ -30,6 +32,10 @@ func TestExec(t *testing.T) {
 		testName := test.Name()
 		t.Run(testName, func(t *testing.T) {
 			t.Parallel()
+
+			if strings.HasSuffix(testName, LongTestSuffix) && testing.Short() {
+				t.Skip("short enabled")
+			}
 
 			cmd := exec.Command("./" + testName)
 			cmd.Stdout = os.Stdout
