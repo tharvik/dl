@@ -205,6 +205,7 @@ func fetch(logger *log.Logger, args []string) error {
 					cmd.Dir = prefix
 					logger.Printf("fetch: %v: running \"%s\"", prefix, strings.Join(cmdArgs, " "))
 					if err := cmd.Run(); err != nil {
+						os.Remove(outputPath)
 						return fmt.Errorf("run fetcher: %v: %v", dl.Name, err)
 					}
 

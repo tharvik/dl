@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+. ./dl.sh
+
+create_script <<-EOF
+dl fetcher false false
+dl add -f false -o undefined
+EOF
+
+dl || :
+
+[ -e undefined ] && fail "file shouldn't exists" || :
