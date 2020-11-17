@@ -18,7 +18,6 @@ func TestExec(t *testing.T) {
 		panic(err)
 	}
 
-	println("testdata:", filepath.Join(cwd, TestDir))
 	tests, err := ioutil.ReadDir(filepath.Join(cwd, TestDir))
 	if err != nil {
 		panic(err)
